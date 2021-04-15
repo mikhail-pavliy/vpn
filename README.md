@@ -233,7 +233,171 @@ verb 3
 # Вывод 
 В тестовой среде результаты в режиме tun чуть лучше. В связи с этим, я думаю, что в живой среде тоже будет лучше использовать режим tun. А режим tap лучше использовать в специфических задачах, например, если в архитектуре сети необходимо достичь связности  к примеру по L2.
 
+# Поднять RAS на базе OpenVPN с клиентскими сертификатами.
 
+На сервере инициализируем pki:
+```ruby
+[root@server-ovpn openvpn]# /usr/share/easy-rsa/3.0.8/easyrsa init-pki
+
+init-pki complete; you may now create a CA or requests.
+Your newly created PKI dir is: /etc/openvpn/pki
+```
+Сгенерируем необходимые ключи и сертификаты для сервера.
+```ruby
+[root@server-ovpn openvpn]# echo 'rasvpn' | /usr/share/easy-rsa/3.0.8/easyrsa build-ca nopass
+Using SSL: openssl OpenSSL 1.0.2k-fips  26 Jan 2017
+Generating RSA private key, 2048 bit long modulus
+.....+++
+............................+++
+e is 65537 (0x10001)
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [Easy-RSA CA]:
+CA creation complete and you may now import and sign cert requests.
+Your new CA certificate file for publishing is at:
+/etc/openvpn/pki/ca.crt
+```
+
+```ruby
+[root@server-ovpn openvpn]# echo 'rasvpn' | /usr/share/easy-rsa/3.0.8/easyrsa gen-req server nopass
+Using SSL: openssl OpenSSL 1.0.2k-fips  26 Jan 2017
+Generating a 2048 bit RSA private key
+.........................................................+++
+...........................................................+++
+writing new private key to '/etc/openvpn/pki/easy-rsa-23130.LSCYV7/tmp.46fdqV'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [server]:
+Keypair and certificate request completed. Your files are:
+req: /etc/openvpn/pki/reqs/server.req
+key: /etc/openvpn/pki/private/server.key
+```
+Создаем и подписываем сертификат для нашего сервера:
+```ruby
+[root@server-ovpn openvpn]# echo 'yes' | /usr/share/easy-rsa/3.0.8/easyrsa sign-req server server
+Using SSL: openssl OpenSSL 1.0.2k-fips  26 Jan 2017
+
+
+You are about to sign the following certificate.
+Please check over the details shown below for accuracy. Note that this request
+has not been cryptographically verified. Please be sure it came from a trusted
+source or that you have verified the request checksum with the sender.
+
+Request subject, to be signed as a server certificate for 825 days:
+
+subject=
+    commonName                = rasvpn
+
+
+Type the word 'yes' to continue, or any other input to abort.
+  Confirm request details: Using configuration from /etc/openvpn/pki/easy-rsa-23158.mnLZFq/tmp.J7gHVK
+Check that the request matches the signature
+Signature ok
+The Subject's Distinguished Name is as follows
+commonName            :ASN.1 12:'rasvpn'
+Certificate is to be certified until Jul 19 10:20:13 2023 GMT (825 days)
+
+Write out database with 1 new entries
+Data Base Updated
+
+Certificate created at: /etc/openvpn/pki/issued/server.crt
+```
+Генерим ключи Диффи-Хелмана:
+```ruby
+[root@server-ovpn openvpn]# /usr/share/easy-rsa/3.0.8/easyrsa gen-dh
+.................................................................++*++*
+
+DH parameters of size 2048 created at /etc/openvpn/pki/dh.pem
+```
+Создадим  ключ ```ta.key```, который используется для tls-аутентификации:
+```ruby
+[root@server-ovpn openvpn]# openvpn --genkey --secret ta.key
+```
+Дальше сгенерируем сертификаты для клиента:
+```ruby
+[root@server-ovpn openvpn]# echo 'client' | /usr/share/easy-rsa/3.0.8/easyrsa gen-req client nopass
+Using SSL: openssl OpenSSL 1.0.2k-fips  26 Jan 2017
+Generating a 2048 bit RSA private key
+.................................+++
+....................+++
+writing new private key to '/etc/openvpn/pki/easy-rsa-23251.zkgHX7/tmp.DVjuw8'
+-----
+You are about to be asked to enter information that will be incorporated
+into your certificate request.
+What you are about to enter is what is called a Distinguished Name or a DN.
+There are quite a few fields but you can leave some blank
+For some fields there will be a default value,
+If you enter '.', the field will be left blank.
+-----
+Common Name (eg: your user, host, or server name) [client]:
+Keypair and certificate request completed. Your files are:
+req: /etc/openvpn/pki/reqs/client.req
+key: /etc/openvpn/pki/private/client.key
+```
+```ruby
+[root@server-ovpn openvpn]# echo 'yes' | /usr/share/easy-rsa/3.0.8/easyrsa sign-req client client
+Using SSL: openssl OpenSSL 1.0.2k-fips  26 Jan 2017
+
+
+You are about to sign the following certificate.
+Please check over the details shown below for accuracy. Note that this request
+has not been cryptographically verified. Please be sure it came from a trusted
+source or that you have verified the request checksum with the sender.
+
+Request subject, to be signed as a client certificate for 825 days:
+
+subject=
+    commonName                = client
+
+
+Type the word 'yes' to continue, or any other input to abort.
+  Confirm request details: Using configuration from /etc/openvpn/pki/easy-rsa-23279.qTFZ66/tmp.E8oi9r
+Check that the request matches the signature
+Signature ok
+The Subject's Distinguished Name is as follows
+commonName            :ASN.1 12:'client'
+Certificate is to be certified until Jul 19 10:45:32 2023 GMT (825 days)
+
+Write out database with 1 new entries
+Data Base Updated
+
+Certificate created at: /etc/openvpn/pki/issued/client.crt
+```
+Изменим конфигурационный файл сервера добавив данные с ключами, после чего необходимо перезагрузить сервис:
+```ruby
+[root@server-ovpn openvpn]# cat server.conf
+port 1194
+proto udp
+dev tun
+ca /etc/openvpn/pki/ca.crt
+cert /etc/openvpn/pki/issued/server.crt
+key /etc/openvpn/pki/private/server.key
+dh /etc/openvpn/pki/dh.pem
+server 172.20.0.0 255.255.255.0
+route 10.10.0.2 255.255.255.255
+push "route 10.10.0.1 255.255.255.255"
+client-to-client
+client-config-dir /etc/openvpn/client
+keepalive 10 120
+compress lzo
+persist-key
+persist-tun
+status /var/log/openvpn-status.log
+log /var/log/openvpn.log
+verb 3
+verb 3
+```
 
 
 
