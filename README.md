@@ -400,6 +400,43 @@ verb 3
 ```
 Дальше нам необходимо скопировать на клиента следующие файлы: ```/etc/openvpn/pki/ca.crt``` ```/etc/openvpn/pki/issued/client.crt``` ```/etc/openvpn/pki/private/client.key``` и для простоты использование расположить их где будет лежать ```client.conf```
 
+Создадим конфигурационный файл на клиенте, остановим openvpn@server и запустим openvpn@client:
+```ruby
+[root@client-ovpn openvpn]# cat > /etc/openvpn/client.conf <<EOF
+> dev tun
+> proto udp
+> remote 10.10.10.10 1194
+> client
+> resolv-retry infinite
+> ca ./ca.crt
+> cert ./client.crt
+> key ./client.key
+> compress lzo
+> persist-key
+> persist-tun
+> status /var/log/openvpn-client-status.log
+> log-append /var/log/openvpn-client.log
+> verb 3
+> EOF
+```
+```ruby
+[root@client-ovpn openvpn]# systemctl status openvpn@client
+● openvpn@client.service - OpenVPN Robust And Highly Flexible Tunneling Application On client
+   Loaded: loaded (/usr/lib/systemd/system/openvpn@.service; enabled; vendor preset: disabled)
+   Active: active (running) since Thu 2021-04-15 11:56:19 UTC; 2min 52s ago
+ Main PID: 22504 (openvpn)
+   Status: "Initialization Sequence Completed"
+   CGroup: /system.slice/system-openvpn.slice/openvpn@client.service
+           └─22504 /usr/sbin/openvpn --cd /etc/openvpn/ --config client.c
+```
+```ruby
+[root@client-ovpn openvpn]# ping 10.10.0.1
+PING 10.10.0.1 (10.10.0.1) 56(84) bytes of data.
+64 bytes from 10.10.0.1: icmp_seq=1 ttl=64 time=0.554 ms
+64 bytes from 10.10.0.1: icmp_seq=2 ttl=64 time=0.511 ms
+64 bytes from 10.10.0.1: icmp_seq=3 ttl=64 time=0.498 ms
+```
+
 
 
 
