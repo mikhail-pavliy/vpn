@@ -398,6 +398,8 @@ log /var/log/openvpn.log
 verb 3
 verb 3
 ```
+Дальше нам необходимо скопировать на клиента следующие файлы: ```/etc/openvpn/pki/ca.crt``` ```/etc/openvpn/pki/issued/client.crt``` ```/etc/openvpn/pki/private/client.key``` и для простоты использование расположить их где будет лежать ```client.conf```
+
 
 
 
